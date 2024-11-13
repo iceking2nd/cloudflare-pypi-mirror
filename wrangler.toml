@@ -1,0 +1,28 @@
+#:schema node_modules/wrangler/config-schema.json
+name = "cloudflare-pypi-mirror"
+main = "src/index.js"
+compatibility_date = "2023-05-18"
+compatibility_flags = ["nodejs_compat"]
+
+# Workers Logs
+# Docs: https://developers.cloudflare.com/workers/observability/logs/workers-logs/
+# Configuration: https://developers.cloudflare.com/workers/observability/logs/workers-logs/#enable-workers-logs
+[observability]
+enabled = true
+
+[env.dev.vars]
+MODE = "debug"
+TARGET_UPSTREAM = "pypi.org"
+CUSTOM_DOMAIN = "example.com"
+
+[env.production]
+name = "cloudflare-pypi-mirror"
+#routes = [
+#  { pattern = "pypi.example.com", custom_domain = true },
+#  { pattern = "py-files.example.com", custom_domain = true }
+#]
+
+[env.production.vars]
+MODE = "production"
+TARGET_UPSTREAM = ""
+
