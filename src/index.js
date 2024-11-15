@@ -43,30 +43,42 @@ export default {
 		}
 
 		const newUrl = new URL("https://" + upstream + url.pathname);
-		const newReq = new Request(newUrl, {
+		const newReq = new Request(newUrl,{
 			method: request.method,
-			headers: request.headers,
+			headers: (request, upstream) => {
+			switch (upstream) {
+				case Pypi:
+					const newReqHeaders = new Headers(request.headers);
+					newReqHeaders.set("Accept-Encoding", "gzip, deflate");
+					return newReqHeaders;
+					default:
+						return request.headers;
+			}
+			},
 			redirect: "follow",
 		});
 		const resp = await fetch(newReq);
+
 		const newHeaders = new Headers();
-		for (const kv in resp.headers.entries()) {
-			newHeaders.set(kv[0],kv[1]);
+		resp.headers.forEach((value, key) => {
+			newHeaders.set(key,value);
+		})
+		switch (upstream) {
+			case Pypi:
+				const body = await resp.text();
+				let newBody = _.replace(body, new RegExp(PyFiles,"g"),_.findKey(routes,function(o){
+					return o === PyFiles;
+				}));
+				newHeaders.set("content-length", String(newBody.length));
+				return new Response(newBody,{
+					status: resp.status,
+					headers: newHeaders
+				})
+			default:
+				return new Response(resp.body,{
+					status: resp.status,
+					headers: resp.headers,
+				})
 		}
-		if (upstream === Pypi) {
-			const body = await resp.text();
-			const newBody = _.replace(body, new RegExp(PyFiles,"g"),_.findKey(routes,function(o){
-				return o === PyFiles;
-			}));
-			newHeaders.set("content-length", String(newBody.length));
-			return new Response(newBody,{
-				status: resp.status,
-				headers: newHeaders
-			})
-		}
-		return new Response(resp.body,{
-			status: resp.status,
-			headers: newHeaders,
-		});
 	},
 };
