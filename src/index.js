@@ -50,7 +50,9 @@ export default {
 		});
 		const resp = await fetch(newReq);
 		const newHeaders = new Headers();
-		newHeaders.set("content-type", resp.headers.get("content-type"));
+		for (const kv in resp.headers.entries()) {
+			newHeaders.set(kv[0],kv[1]);
+		}
 		if (upstream === Pypi) {
 			const body = await resp.text();
 			const newBody = _.replace(body, new RegExp(PyFiles,"g"),_.findKey(routes,function(o){
@@ -62,7 +64,6 @@ export default {
 				headers: newHeaders
 			})
 		}
-		newHeaders.set("content-length", resp.headers.get("content-length"));
 		return new Response(resp.body,{
 			status: resp.status,
 			headers: newHeaders,

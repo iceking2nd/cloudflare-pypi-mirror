@@ -25,4 +25,4 @@ name = "cloudflare-pypi-mirror"
 [env.production.vars]
 MODE = "production"
 TARGET_UPSTREAM = ""
-
+CUSTOM_DOMAIN = "example.com"
