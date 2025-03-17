@@ -7,78 +7,57 @@
  *
  * Learn more at https://developers.cloudflare.com/workers/
  */
-import _ from 'lodash-es'
+import { trimStart, split, replace } from 'lodash-es'
 
 export default {
 	async fetch(request, env, ctx) {
 
-		const Pypi = "pypi.org";
-		const PyFiles = "files.pythonhosted.org";
-		const routes = {
-			["pypi." + env.CUSTOM_DOMAIN]: Pypi,
-			["py-files." + env.CUSTOM_DOMAIN]: PyFiles,
-		};
-
-		function routeByHosts(host){
-			if (host in routes) {
-				return routes[host];
-			}
-			if (env.MODE === "debug") {
-				return env.TARGET_UPSTREAM;
-			}
-			return "";
-		}
+		const PyFiles = "http[s]?://files.pythonhosted.org";
 
 		const url = new URL(request.url);
-		const upstream = routeByHosts(url.hostname);
-		if (upstream === "") {
-			return new Response(
-				JSON.stringify({
-					routes: routes,
-				}),
-				{
-					status: 404,
+		console.debug(`request url: ${url}, protocol: ${url.protocol}, hostname: ${url.hostname}, port: ${url.port}, path: ${url.pathname}, hash: ${url.hash}`)
+
+		console.debug(`identifier: ${split(url.pathname, '/', 2)[1]}`)
+
+		switch (split(url.pathname, '/', 2)[1]) {
+			case '~files':
+				try {
+					const newURL = new URL(trimStart(url.pathname,"/~files"), `https://files.pythonhosted.org`);
+					const response = await fetch(newURL);
+					return new Response(response.body, {
+						status: response.status,
+						headers: response.headers,
+					});
+
+				} catch (error) {
+					return new Response(`File fetch failed: ${error.message}`, { status: 502 });
 				}
-			);
-		}
+			default:
+				const newUrl = new URL(url.pathname, `https://pypi.org`);
+				console.debug(`new url: ${newUrl}`)
 
-		const newUrl = new URL("https://" + upstream + url.pathname);
-		const newReq = new Request(newUrl,{
-			method: request.method,
-			headers: (request, upstream) => {
-			switch (upstream) {
-				case Pypi:
-					const newReqHeaders = new Headers(request.headers);
-					newReqHeaders.set("Accept-Encoding", "gzip, deflate");
-					return newReqHeaders;
-					default:
-						return request.headers;
-			}
-			},
-			redirect: "follow",
-		});
-		const resp = await fetch(newReq);
+				const newReq = new Request(newUrl,{
+					method: request.method,
+					headers: (request) => {
+								const newReqHeaders = new Headers(request.headers);
+								newReqHeaders.set("Accept-Encoding", "gzip, deflate");
+								return newReqHeaders;
+					},
+					redirect: "follow",
+				});
+				const resp = await fetch(newReq);
 
-		const newHeaders = new Headers();
-		resp.headers.forEach((value, key) => {
-			newHeaders.set(key,value);
-		})
-		switch (upstream) {
-			case Pypi:
+				const newHeaders = new Headers();
+				resp.headers.forEach((value, key) => {
+					newHeaders.set(key,value);
+				})
 				const body = await resp.text();
-				let newBody = _.replace(body, new RegExp(PyFiles,"g"),_.findKey(routes,function(o){
-					return o === PyFiles;
-				}));
+				let newBody = replace(body, new RegExp(PyFiles,"g"), `${url.protocol}//${url.hostname}${url.port === "80" || url.port === "443" || url.port === "" ? "" : ":"+url.port }/~files`);
 				newHeaders.set("content-length", String(newBody.length));
 				return new Response(newBody,{
 					status: resp.status,
 					headers: newHeaders
 				})
-			default:
-				return new Response(resp.body,{
-					status: resp.status,
-					headers: resp.headers,
-				})
 		}
-	},
+	}
 };
